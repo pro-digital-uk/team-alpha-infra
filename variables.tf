@@ -58,6 +58,12 @@ variable "enable_nat_gateway" {
   default     = false
 }
 
+variable "ssh_cidr_blocks" {
+  description = "CIDR ranges allowed to reach the web tier via SSH. Only used when the security_groups module is enabled."
+  type        = list(string)
+  default     = ["0.0.0.0/0"]
+}
+
 variable "instance_type" {
   description = "Instance type for the web and app servers."
   type        = string
@@ -74,4 +80,11 @@ variable "allowed_http_cidrs" {
   description = "CIDR ranges allowed to reach the web tier. Only used when the security_groups module is enabled."
   type        = list(string)
   default     = ["0.0.0.0/0"]
+}
+
+variable "az" {
+  description = "Availability Zone to deploy into. Only used when the security_groups module is enabled."
+  type        = string
+  default     = "eu-west-2a"
+
 }
