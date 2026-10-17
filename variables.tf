@@ -11,7 +11,7 @@ variable "project_name" {
 }
 
 variable "environment_name" {
-  description = "Environment identifier for tagging (e.g. mupando-dev, supando-dev)."
+  description = "Environment identifier for tagging (e.g. dev, staging, prod)."
   type        = string
   default     = "dev"
 }
