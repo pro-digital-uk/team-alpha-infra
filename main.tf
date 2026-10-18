@@ -13,7 +13,8 @@ locals {
 # Network: web (public), app (private) and data (isolated) subnets
 # ---------------------------------------------------------------------------
 module "vpc" {
-  source              = "git@github.com:pro-digital-uk/aws-vpc-module.git"
+  source = "git::https://github.com/pro-digital-uk/aws-vpc-module.git"
+  # source              = "git@github.com:pro-digital-uk/aws-vpc-module.git"
   name                = local.name
   cidr_block          = var.vpc_cidr
   azs                 = local.azs
@@ -28,7 +29,7 @@ module "vpc" {
 # Data tier storage: private, versioned, encrypted S3 bucket
 # ---------------------------------------------------------------------------
 module "s3_assets" {
-  source = "git@github.com:pro-digital-uk/aws-s3-module.git"
+  source = "git::https://github.com/pro-digital-uk/aws-s3-module.git"
 
   bucket_name   = "${local.name}-assets-${data.aws_caller_identity.current.account_id}"
   force_destroy = var.force_destroy_bucket
@@ -38,7 +39,7 @@ module "s3_assets" {
 # Web tier: Nginx in a public subnet
 # ---------------------------------------------------------------------------
 module "web" {
-  source = "git@github.com:pro-digital-uk/aws-ec2-module.git"
+  source = "git::https://github.com/pro-digital-uk/aws-ec2-module.git"
 
   name                        = "${local.name}-web"
   subnet_id                   = module.vpc.public_subnet_ids[0]
@@ -56,7 +57,7 @@ module "web" {
 module "app" {
   # source = "../../modules/ec2"
 
-  source = "git@github.com:pro-digital-uk/aws-ec2-module.git"
+  source = "git::https://github.com/pro-digital-uk/aws-ec2-module.git"
 
   name           = "${local.name}-app"
   subnet_id      = module.vpc.app_subnet_ids[0]
