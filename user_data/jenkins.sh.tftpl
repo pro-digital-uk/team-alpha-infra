@@ -1,24 +1,68 @@
 #!/bin/bash
-# set -euo pipefail
+set -euo pipefail
+
+log_file="/var/log/jenkins-setup.log"
+
+log_message() {
+  echo "[$(date +'%Y-%m-%d %H:%M:%S')] $*" | sudo tee -a "$log_file"
+}
+
+error_exit() {
+  log_message "ERROR: $*"
+  exit 1
+}
+
+log_message "Starting Jenkins Docker deployment..."
 
 # Update package lists
-sudo apt-get update -y
+log_message "Updating package lists..."
+sudo apt-get update -y || error_exit "Failed to update packages"
 
 # Install Docker
-sudo apt-get install -y docker.io
-sudo systemctl start docker
-sudo systemctl enable docker
-sudo usermod -aG docker ubuntu
+log_message "Installing Docker..."
+sudo apt-get install -y docker.io || error_exit "Failed to install Docker"
 
-# Wait for Docker to be ready
-sleep 5
+# Start and enable Docker service
+log_message "Starting Docker service..."
+sudo systemctl start docker || error_exit "Failed to start Docker"
+sudo systemctl enable docker || error_exit "Failed to enable Docker"
 
-# Create Jenkins volumes and directories
-sudo docker volume create jenkins-data
-sudo docker volume create jenkins-docker-certs
-mkdir -p /home/ubuntu/jenkins_home
+# Add ubuntu user to docker group
+sudo usermod -aG docker ubuntu || error_exit "Failed to add ubuntu to docker group"
 
-# Pull and run Jenkins Docker image
+# Wait for Docker daemon to be fully ready
+log_message "Waiting for Docker daemon to be ready..."
+max_attempts=30
+attempt=0
+while [ $attempt -lt $max_attempts ]; do
+  if sudo docker ps > /dev/null 2>&1; then
+    log_message "Docker daemon is ready"
+    break
+  fi
+  attempt=$((attempt + 1))
+  log_message "Docker not ready yet, waiting... (attempt $attempt/$max_attempts)"
+  sleep 2
+done
+
+if [ $attempt -eq $max_attempts ]; then
+  error_exit "Docker daemon failed to become ready within timeout"
+fi
+
+# Create Jenkins volumes
+log_message "Creating Docker volumes..."
+sudo docker volume create jenkins-data 2>/dev/null || log_message "jenkins-data volume already exists"
+
+# Create host directory for Jenkins home
+log_message "Creating Jenkins home directory..."
+sudo mkdir -p /var/jenkins_home
+sudo chown 1000:1000 /var/jenkins_home
+
+# Pull Jenkins image
+log_message "Pulling Jenkins LTS image..."
+sudo docker pull jenkins/jenkins:lts || error_exit "Failed to pull Jenkins image"
+
+# Run Jenkins container
+log_message "Starting Jenkins Docker container..."
 sudo docker run -d \
   --name jenkins \
   --restart unless-stopped \
@@ -26,39 +70,55 @@ sudo docker run -d \
   -p 50000:50000 \
   -v jenkins-data:/var/jenkins_home \
   -v /var/run/docker.sock:/var/run/docker.sock \
-  -v /home/ubuntu/jenkins_home:/var/jenkins_home \
   --user root \
-  jenkins/jenkins:lts
+  jenkins/jenkins:lts || error_exit "Failed to start Jenkins container"
 
-# Wait for Jenkins to start
-sleep 15
+# Wait for Jenkins to be ready
+log_message "Waiting for Jenkins to initialize..."
+max_attempts=60
+attempt=0
+while [ $attempt -lt $max_attempts ]; do
+  if sudo docker ps 2>/dev/null | grep -q jenkins; then
+    log_message "Jenkins container is running"
+    break
+  fi
+  attempt=$((attempt + 1))
+  if [ $((attempt % 10)) -eq 0 ]; then
+    log_message "Still waiting... (attempt $attempt/$max_attempts)"
+  fi
+  sleep 2
+done
 
-# Check Jenkins container status
-sudo docker ps | grep jenkins
-echo "Jenkins is running on port 8080"
+if [ $attempt -eq $max_attempts ]; then
+  log_message "WARNING: Jenkins startup timeout"
+  error_exit "Jenkins container failed to start"
+fi
+
+log_message "Jenkins Docker deployment completed"
 
 # Install Git
-sudo apt-get install -y git
+log_message "Installing Git..."
+sudo apt-get install -y git || error_exit "Failed to install Git"
 
 # Install Terraform
+log_message "Installing Terraform..."
 wget -O - https://apt.releases.hashicorp.com/gpg | sudo gpg --dearmor -o /usr/share/keyrings/hashicorp-archive-keyring.gpg
 echo "deb [signed-by=/usr/share/keyrings/hashicorp-archive-keyring.gpg] https://apt.releases.hashicorp.com $(lsb_release -cs) main" | sudo tee /etc/apt/sources.list.d/hashicorp.list
 sudo apt-get update -y
-sudo apt-get install -y terraform
-
-# Install Docker
-sudo apt-get install -y docker.io
-sudo systemctl start docker
-sudo systemctl enable docker
-sudo usermod -aG docker ubuntu
+sudo apt-get install -y terraform || error_exit "Failed to install Terraform"
 
 # Install AWS CLI
+log_message "Installing AWS CLI..."
 curl "https://awscli.amazonaws.com/awscli-exe-linux-x86_64.zip" -o "awscliv2.zip"
 unzip awscliv2.zip
-sudo ./aws/install
+sudo ./aws/install || error_exit "Failed to install AWS CLI"
 
 # Install Maven
-sudo apt-get install -y maven
+log_message "Installing Maven..."
+sudo apt-get install -y maven || error_exit "Failed to install Maven"
 
 # Install .NET SDK
-sudo apt-get install -y dotnet-sdk-8.0
+log_message "Installing .NET SDK..."
+sudo apt-get install -y dotnet-sdk-8.0 || error_exit "Failed to install .NET SDK"
+
+log_message "All installations completed successfully"
