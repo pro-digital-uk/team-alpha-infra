@@ -1,0 +1,64 @@
+#!/bin/bash
+# set -euo pipefail
+
+# Update package lists
+sudo apt-get update -y
+
+# Install Docker
+sudo apt-get install -y docker.io
+sudo systemctl start docker
+sudo systemctl enable docker
+sudo usermod -aG docker ubuntu
+
+# Wait for Docker to be ready
+sleep 5
+
+# Create Jenkins volumes and directories
+sudo docker volume create jenkins-data
+sudo docker volume create jenkins-docker-certs
+mkdir -p /home/ubuntu/jenkins_home
+
+# Pull and run Jenkins Docker image
+sudo docker run -d \
+  --name jenkins \
+  --restart unless-stopped \
+  -p 8080:8080 \
+  -p 50000:50000 \
+  -v jenkins-data:/var/jenkins_home \
+  -v /var/run/docker.sock:/var/run/docker.sock \
+  -v /home/ubuntu/jenkins_home:/var/jenkins_home \
+  --user root \
+  jenkins/jenkins:lts
+
+# Wait for Jenkins to start
+sleep 15
+
+# Check Jenkins container status
+sudo docker ps | grep jenkins
+echo "Jenkins is running on port 8080"
+
+# Install Git
+sudo apt-get install -y git
+
+# Install Terraform
+wget -O - https://apt.releases.hashicorp.com/gpg | sudo gpg --dearmor -o /usr/share/keyrings/hashicorp-archive-keyring.gpg
+echo "deb [signed-by=/usr/share/keyrings/hashicorp-archive-keyring.gpg] https://apt.releases.hashicorp.com $(lsb_release -cs) main" | sudo tee /etc/apt/sources.list.d/hashicorp.list
+sudo apt-get update -y
+sudo apt-get install -y terraform
+
+# Install Docker
+sudo apt-get install -y docker.io
+sudo systemctl start docker
+sudo systemctl enable docker
+sudo usermod -aG docker ubuntu
+
+# Install AWS CLI
+curl "https://awscli.amazonaws.com/awscli-exe-linux-x86_64.zip" -o "awscliv2.zip"
+unzip awscliv2.zip
+sudo ./aws/install
+
+# Install Maven
+sudo apt-get install -y maven
+
+# Install .NET SDK
+sudo apt-get install -y dotnet-sdk-8.0
