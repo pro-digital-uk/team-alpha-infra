@@ -133,7 +133,7 @@ jobs:
         run: |
           terraform apply -auto-approve -no-color
           echo "jenkins_public_ip=$(terraform output -raw jenkins_public_ip)" >> $GITHUB_OUTPUT
-          echo "instance_id=$(terraform output -raw instance_id)" >> $GITHUB_OUTPUT
+          echo "instance_id=$(terraform output -raw jenkins_instance_id)" >> $GITHUB_OUTPUT
         timeout-minutes: 20
         working-directory: ./
 
