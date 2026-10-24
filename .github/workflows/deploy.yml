@@ -203,20 +203,58 @@ jobs:
             echo "⚠️  Jenkins is running but API may not be fully ready yet"
           fi
 
+      - name: Verify Jenkins via SSH
+        continue-on-error: true
+        run: |
+          JENKINS_IP="${{ needs.terraform-apply.outputs.jenkins-ip }}"
+
+          # Configure SSH
+          mkdir -p ~/.ssh
+          chmod 700 ~/.ssh
+          echo "${{ secrets.EC2_PRIVATE_KEY }}" > ~/.ssh/id_rsa
+          chmod 600 ~/.ssh/id_rsa
+
+          echo "🔐 Connecting to instance via SSH..."
+          echo "Instance IP: $JENKINS_IP"
+
+          # SSH into instance and check Jenkins status
+          ssh -i ~/.ssh/id_rsa -o StrictHostKeyChecking=no -o ConnectTimeout=10 ec2-user@$JENKINS_IP << 'SSHEOF'
+          echo "=== Jenkins Service Status ==="
+          sudo systemctl status jenkins
+
+          echo ""
+          echo "=== Docker Containers ==="
+          docker ps | grep jenkins || echo "Jenkins container not found"
+
+          echo ""
+          echo "=== Jenkins Container Logs (Last 50 lines) ==="
+          docker logs jenkins 2>/dev/null | tail -50 || echo "Could not fetch Docker logs"
+
+          echo ""
+          echo "=== Port 8080 Listening ==="
+          sudo netstat -tuln | grep 8080 || sudo ss -tuln | grep 8080 || echo "Port 8080 not found"
+
+          echo ""
+          echo "=== Jenkins Setup Log ==="
+          tail -50 /var/log/jenkins-setup.log 2>/dev/null || echo "Setup log not found"
+
+          echo ""
+          echo "✅ SSH verification complete"
+          SSHEOF
+
       - name: Get Jenkins initial admin password
         continue-on-error: true
         run: |
           JENKINS_IP="${{ needs.terraform-apply.outputs.jenkins-ip }}"
-          echo "Attempting to retrieve Jenkins initial admin password..."
 
-          # Note: This requires SSH access to the instance
-          # Uncomment if you have SSH key configured
-          # ssh -i ${{ secrets.EC2_PRIVATE_KEY }} -o StrictHostKeyChecking=no ec2-user@$JENKINS_IP \
-          #   "sudo cat /var/lib/jenkins/secrets/initialAdminPassword"
+          mkdir -p ~/.ssh
+          chmod 700 ~/.ssh
+          echo "${{ secrets.EC2_PRIVATE_KEY }}" > ~/.ssh/id_rsa
+          chmod 600 ~/.ssh/id_rsa
 
-          echo "ℹ️  SSH to instance to get password:"
-          echo "ssh -i your-key.pem ec2-user@$JENKINS_IP"
-          echo "sudo cat /var/lib/jenkins/secrets/initialAdminPassword"
+          echo "🔐 Retrieving Jenkins initial admin password..."
+          ssh -i ~/.ssh/id_rsa -o StrictHostKeyChecking=no ec2-user@$JENKINS_IP \
+            "sudo cat /var/lib/jenkins_home/secrets/initialAdminPassword" || echo "Password file not found yet"
 
       - name: Generate summary
         if: always()
