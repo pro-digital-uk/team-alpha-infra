@@ -43,7 +43,7 @@ module "s3_assets" {
 module "ec2_jenkins" {
   source = "git::https://github.com/pro-digital-uk/aws-ec2-module.git"
 
-  name                        = "${local.name}-jenkins"
+  name                        = "${local.name}-jenkins-server"
   subnet_id                   = module.vpc.public_subnet_ids[0]
   instance_type               = var.instance_type
   associate_public_ip_address = true
@@ -58,18 +58,18 @@ module "ec2_jenkins" {
 # ---------------------------------------------------------------------------
 # Web tier: Nginx in a public subnet
 # ---------------------------------------------------------------------------
-# module "ec2_web" {
-#   source = "git::https://github.com/pro-digital-uk/aws-ec2-module.git"
+module "ec2_web" {
+  source = "git::https://github.com/pro-digital-uk/aws-ec2-module.git"
 
-#   name                        = "${local.name}-web"
-#   subnet_id                   = module.vpc.public_subnet_ids[0]
-#   instance_type               = var.instance_type
-#   associate_public_ip_address = true
-#   s3_bucket_arns              = [module.s3_assets.bucket_arn]
-#   user_data                   = templatefile("${path.module}/user_data/web.sh.tftpl", { environment = var.environment })
+  name                        = "${local.name}-web-server"
+  subnet_id                   = module.vpc.public_subnet_ids[0]
+  instance_type               = var.instance_type
+  associate_public_ip_address = true
+  # s3_bucket_arns              = [module.s3_assets.bucket_arn]
+  user_data                   = templatefile("${path.module}/user_data/web.sh.tftpl", { environment = var.environment })
 
-#   security_group_ids = [aws_security_group.web.id]
-# }
+  security_group_ids = [aws_security_group.web.id]
+}
 
 # ---------------------------------------------------------------------------
 # App tier: private subnet, no public IP
