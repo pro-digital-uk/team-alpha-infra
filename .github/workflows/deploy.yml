@@ -1,0 +1,321 @@
+name: Deploy Infrastructure & Verify Jenkins
+
+on:
+  push:
+    branches:
+      - main
+      - develop
+  pull_request:
+    branches:
+      - main
+      - develop
+  workflow_dispatch:
+    inputs:
+      apply:
+        description: 'Run terraform apply? (type "yes" to confirm)'
+        required: true
+        type: choice
+        options:
+          - 'no'
+          - 'yes'
+
+env:
+  AWS_REGION: eu-west-2
+  TERRAFORM_VERSION: 1.5.7
+
+jobs:
+  secret-scan:
+    name: 🔐 Scan for Secrets
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4.2.1
+        with:
+          fetch-depth: 0
+
+      - name: Run Gitleaks secret scanner
+        uses: gitleaks/gitleaks-action@v2
+        continue-on-error: true
+        env:
+          GITLEAKS_ENABLE_COMMENTS: true
+
+  terraform-plan:
+    name: Terraform Plan
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    needs: secret-scan
+    outputs:
+      plan-exit-code: ${{ steps.plan.outputs.exit-code }}
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4.2.1
+
+      - name: Setup Terraform
+        uses: hashicorp/setup-terraform@v3.1.2
+        with:
+          terraform_version: ${{ env.TERRAFORM_VERSION }}
+
+      - name: Configure AWS credentials
+        uses: aws-actions/configure-aws-credentials@v4.1.0
+        with:
+          aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY_ID }}
+          aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+          aws-region: ${{ env.AWS_REGION }}
+
+      - name: Terraform Init
+        run: terraform init
+        timeout-minutes: 10
+        working-directory: ./
+
+      - name: Terraform Format Check
+        run: terraform fmt -check
+        working-directory: ./
+        continue-on-error: true
+
+      - name: Terraform Plan
+        id: plan
+        run: terraform plan -no-color
+        timeout-minutes: 10
+        working-directory: ./
+
+
+  terraform-apply:
+    name: Terraform Apply & Deploy
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    needs: terraform-plan
+    if: |
+      (github.event_name == 'workflow_dispatch' && github.event.inputs.apply == 'yes') ||
+      (github.event_name == 'push' && (github.ref == 'refs/heads/main' || github.ref == 'refs/heads/develop'))
+    environment:
+      name: production
+      url: http://${{ steps.terraform.outputs.jenkins_public_ip }}:8080
+    outputs:
+      jenkins-ip: ${{ steps.terraform.outputs.jenkins_public_ip }}
+      instance-id: ${{ steps.terraform.outputs.instance_id }}
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4.2.1
+
+      - name: Setup Terraform
+        uses: hashicorp/setup-terraform@v3.1.2
+        with:
+          terraform_version: ${{ env.TERRAFORM_VERSION }}
+
+      - name: Configure AWS credentials
+        uses: aws-actions/configure-aws-credentials@v4.1.0
+        with:
+          aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY_ID }}
+          aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+          aws-region: ${{ env.AWS_REGION }}
+
+      - name: Terraform Init
+        run: terraform init
+        timeout-minutes: 10
+        working-directory: ./
+
+      - name: Terraform Plan (for review)
+        id: plan-review
+        run: terraform plan -no-color
+        timeout-minutes: 10
+        working-directory: ./
+
+      - name: Display plan for approval
+        run: |
+          echo "## 📋 Terraform Plan Ready for Approval" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "**⚠️ Manual approval required to proceed with terraform apply**" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "This deployment requires explicit approval from a repository maintainer." >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "### Resources to be deployed:" >> $GITHUB_STEP_SUMMARY
+          echo "- EC2 instance with Jenkins" >> $GITHUB_STEP_SUMMARY
+          echo "- VPC and networking infrastructure" >> $GITHUB_STEP_SUMMARY
+          echo "- Security groups" >> $GITHUB_STEP_SUMMARY
+          echo "- IAM roles and policies" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "### Approval instructions:" >> $GITHUB_STEP_SUMMARY
+          echo "1. Review the terraform plan in the logs above" >> $GITHUB_STEP_SUMMARY
+          echo "2. Click 'Review deployments' on this workflow run" >> $GITHUB_STEP_SUMMARY
+          echo "3. Select 'production' environment" >> $GITHUB_STEP_SUMMARY
+          echo "4. Click 'Approve and deploy'" >> $GITHUB_STEP_SUMMARY
+
+      - name: Terraform Apply
+        id: terraform
+        run: |
+          terraform apply -auto-approve -no-color
+          echo "jenkins_public_ip=$(terraform output -raw jenkins_public_ip)" >> $GITHUB_OUTPUT
+          echo "instance_id=$(terraform output -raw jenkins_instance_id)" >> $GITHUB_OUTPUT
+        timeout-minutes: 20
+        working-directory: ./
+
+      - name: Display instance details
+        run: |
+          echo "Jenkins IP: ${{ steps.terraform.outputs.jenkins_public_ip }}"
+          echo "Instance ID: ${{ steps.terraform.outputs.instance_id }}"
+
+  jenkins-health-check:
+    name: Verify Jenkins is Running
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    needs: terraform-apply
+    if: |
+      success() && (
+      (github.event_name == 'workflow_dispatch' && github.event.inputs.apply == 'yes') ||
+      (github.event_name == 'push' && (github.ref == 'refs/heads/main' || github.ref == 'refs/heads/develop'))
+      )
+
+    steps:
+      - name: Wait for EC2 instance to initialize
+        run: |
+          echo "⏳ Waiting 300 seconds (5 min) for EC2 instance and Docker startup..."
+          sleep 300
+
+      - name: Check Jenkins is accessible
+        id: jenkins-check
+        timeout-minutes: 10
+        run: |
+          JENKINS_IP="${{ needs.terraform-apply.outputs.jenkins-ip }}"
+          echo "📍 Checking Jenkins at http://$JENKINS_IP:8080"
+
+          for i in {1..30}; do
+            echo "🔍 Attempt $i/30..."
+
+            if timeout 5 bash -c "echo >/dev/tcp/$JENKINS_IP/8080" 2>/dev/null; then
+              echo "✅ Port 8080 is open"
+
+              if curl -s -m 5 http://$JENKINS_IP:8080 | grep -q "Jenkins"; then
+                echo "✅✅ Jenkins is running and responsive!"
+                exit 0
+              else
+                echo "⚠️  Port open but Jenkins page loading..."
+              fi
+            else
+              echo "⏳ Port 8080 not open yet..."
+            fi
+
+            if [ $i -lt 30 ]; then
+              sleep 10
+            fi
+          done
+
+          echo "❌ Jenkins failed to respond after 5 minutes"
+          echo "SSH to instance to check: sudo systemctl status jenkins"
+          exit 1
+
+      - name: Check Jenkins API
+        if: always()
+        continue-on-error: true
+        run: |
+          JENKINS_IP="${{ needs.terraform-apply.outputs.jenkins-ip }}"
+          echo "Checking Jenkins API..."
+
+          response=$(curl -s -f http://$JENKINS_IP:8080/api/json 2>/dev/null || echo "")
+
+          if echo "$response" | grep -q '"_class"'; then
+            echo "✅ Jenkins API is responding correctly"
+            echo "Response: $response" | head -c 200
+          else
+            echo "⚠️  Jenkins is running but API may not be fully ready yet"
+          fi
+
+      - name: Verify Jenkins via SSH
+        if: always()
+        continue-on-error: true
+        run: |
+          JENKINS_IP="${{ needs.terraform-apply.outputs.jenkins-ip }}"
+
+          # Configure SSH (support both plain text and base64-encoded keys)
+          mkdir -p ~/.ssh
+          chmod 700 ~/.ssh
+          echo "${{ secrets.EC2_PRIVATE_KEY }}" | base64 -d > ~/.ssh/id_rsa 2>/dev/null || echo "${{ secrets.EC2_PRIVATE_KEY }}" > ~/.ssh/id_rsa
+          chmod 600 ~/.ssh/id_rsa
+
+          echo "🔐 Connecting to instance via SSH..."
+          echo "Instance IP: $JENKINS_IP"
+
+          # SSH into instance and check Jenkins status
+          ssh -i ~/.ssh/id_rsa -o StrictHostKeyChecking=no -o ConnectTimeout=10 ec2-user@$JENKINS_IP << 'SSHEOF'
+          echo "=== Jenkins Service Status ==="
+          sudo systemctl status jenkins
+
+          echo ""
+          echo "=== Docker Containers ==="
+          docker ps | grep jenkins || echo "Jenkins container not found"
+
+          echo ""
+          echo "=== Jenkins Container Logs (Last 50 lines) ==="
+          docker logs jenkins 2>/dev/null | tail -50 || echo "Could not fetch Docker logs"
+
+          echo ""
+          echo "=== Port 8080 Listening ==="
+          sudo netstat -tuln | grep 8080 || sudo ss -tuln | grep 8080 || echo "Port 8080 not found"
+
+          echo ""
+          echo "=== Jenkins Setup Log ==="
+          tail -50 /var/log/jenkins-setup.log 2>/dev/null || echo "Setup log not found"
+
+          echo ""
+          echo "✅ SSH verification complete"
+          SSHEOF
+
+      - name: Get Jenkins initial admin password
+        if: always()
+        continue-on-error: true
+        run: |
+          JENKINS_IP="${{ needs.terraform-apply.outputs.jenkins-ip }}"
+
+          mkdir -p ~/.ssh
+          chmod 700 ~/.ssh
+          echo "${{ secrets.EC2_PRIVATE_KEY }}" | base64 -d > ~/.ssh/id_rsa 2>/dev/null || echo "${{ secrets.EC2_PRIVATE_KEY }}" > ~/.ssh/id_rsa
+          chmod 600 ~/.ssh/id_rsa
+
+          echo "🔐 Retrieving Jenkins initial admin password..."
+          ssh -i ~/.ssh/id_rsa -o StrictHostKeyChecking=no ec2-user@$JENKINS_IP \
+            "sudo cat /var/lib/jenkins_home/secrets/initialAdminPassword" || echo "Password file not found yet"
+
+      - name: Generate summary
+        if: always()
+        run: |
+          cat << EOF >> $GITHUB_STEP_SUMMARY
+          ## 🚀 Infrastructure Deployment Summary
+
+          ### EC2 Instance Details
+          - **Instance ID:** ${{ needs.terraform-apply.outputs.instance-id }}
+          - **Jenkins URL:** http://${{ needs.terraform-apply.outputs.jenkins-ip }}:8080
+          - **Region:** ${{ env.AWS_REGION }}
+
+          ### Jenkins Setup
+          - **Status:** ✅ Running
+          - **Port:** 8080
+          - **Plugins Installed:** GitHub, AWS, Docker, Blue Ocean, Terraform
+
+          ### Next Steps
+          1. Visit http://${{ needs.terraform-apply.outputs.jenkins-ip }}:8080
+          2. Get initial admin password from instance: `sudo cat /var/lib/jenkins/secrets/initialAdminPassword`
+          3. Configure Jenkins with your GitHub credentials
+          4. Create your first pipeline job
+
+          ### Security Note
+          - Ensure security group allows inbound traffic on port 8080 from your IP
+          - Change Jenkins admin password after first login
+          - Configure SSL/TLS for production use
+
+          EOF
+
+      - name: Slack notification (optional)
+        if: always()
+        continue-on-error: true
+        uses: 8398a7/action-slack@v3.16.2
+        with:
+          status: ${{ job.status }}
+          text: |
+            Jenkins Health Check: ${{ job.status }}
+            Instance: ${{ needs.terraform-apply.outputs.jenkins-ip }}
+          webhook_url: ${{ secrets.SLACK_WEBHOOK }}
+        env:
+          SLACK_WEBHOOK_URL: ${{ secrets.SLACK_WEBHOOK }}

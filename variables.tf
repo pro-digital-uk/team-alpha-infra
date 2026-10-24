@@ -88,3 +88,9 @@ variable "az" {
   default     = "eu-west-2a"
 
 }
+
+# variable "jenkins_ami_id" {
+#   description = "AMI ID for the Jenkins server."
+#   type        = string
+#   default     = "ami-0224ce6f9504665ee"
+# }
