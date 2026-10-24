@@ -67,7 +67,7 @@ variable "ssh_cidr_blocks" {
 variable "instance_type" {
   description = "Instance type for the web and app servers."
   type        = string
-  default     = "t2.small"
+  default     = "t2.micro"
 }
 
 variable "force_destroy_bucket" {
@@ -89,8 +89,8 @@ variable "az" {
 
 }
 
-variable "jenkins_ami_id" {
-  description = "AMI ID for the Jenkins server."
-  type        = string
-  default     = "ami-0224ce6f9504665ee"
-}
+# variable "jenkins_ami_id" {
+#   description = "AMI ID for the Jenkins server."
+#   type        = string
+#   default     = "ami-0224ce6f9504665ee"
+# }
