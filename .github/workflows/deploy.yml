@@ -70,6 +70,9 @@ jobs:
     runs-on: ubuntu-latest
     needs: terraform-plan
     if: github.event_name == 'push' && (github.ref == 'refs/heads/main' || github.ref == 'refs/heads/develop')
+    environment:
+      name: production
+      url: http://${{ steps.terraform.outputs.jenkins_public_ip }}:8080
     outputs:
       jenkins-ip: ${{ steps.terraform.outputs.jenkins_public_ip }}
       instance-id: ${{ steps.terraform.outputs.instance_id }}
@@ -93,6 +96,31 @@ jobs:
       - name: Terraform Init
         run: terraform init
         working-directory: ./
+
+      - name: Terraform Plan (for review)
+        id: plan-review
+        run: terraform plan -no-color
+        working-directory: ./
+
+      - name: Display plan for approval
+        run: |
+          echo "## 📋 Terraform Plan Ready for Approval" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "**⚠️ Manual approval required to proceed with terraform apply**" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "This deployment requires explicit approval from a repository maintainer." >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "### Resources to be deployed:" >> $GITHUB_STEP_SUMMARY
+          echo "- EC2 instance with Jenkins" >> $GITHUB_STEP_SUMMARY
+          echo "- VPC and networking infrastructure" >> $GITHUB_STEP_SUMMARY
+          echo "- Security groups" >> $GITHUB_STEP_SUMMARY
+          echo "- IAM roles and policies" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "### Approval instructions:" >> $GITHUB_STEP_SUMMARY
+          echo "1. Review the terraform plan in the logs above" >> $GITHUB_STEP_SUMMARY
+          echo "2. Click 'Review deployments' on this workflow run" >> $GITHUB_STEP_SUMMARY
+          echo "3. Select 'production' environment" >> $GITHUB_STEP_SUMMARY
+          echo "4. Click 'Approve and deploy'" >> $GITHUB_STEP_SUMMARY
 
       - name: Terraform Apply
         id: terraform
