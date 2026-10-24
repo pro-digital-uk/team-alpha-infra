@@ -10,6 +10,14 @@ on:
       - main
       - develop
   workflow_dispatch:
+    inputs:
+      apply:
+        description: 'Run terraform apply? (type "yes" to confirm)'
+        required: true
+        type: choice
+        options:
+          - 'no'
+          - 'yes'
 
 env:
   AWS_REGION: eu-west-2
@@ -73,7 +81,9 @@ jobs:
     runs-on: ubuntu-latest
     timeout-minutes: 30
     needs: terraform-plan
-    if: github.event_name == 'push' && (github.ref == 'refs/heads/main' || github.ref == 'refs/heads/develop')
+    if: |
+      (github.event_name == 'push' && (github.ref == 'refs/heads/main' || github.ref == 'refs/heads/develop')) ||
+      (github.event_name == 'workflow_dispatch' && github.event.inputs.apply == 'yes')
     environment:
       name: production
       url: http://${{ steps.terraform.outputs.jenkins_public_ip }}:8080
@@ -147,7 +157,10 @@ jobs:
     runs-on: ubuntu-latest
     timeout-minutes: 20
     needs: terraform-apply
-    if: github.event_name == 'push' && (github.ref == 'refs/heads/main' || github.ref == 'refs/heads/develop')
+    if: |
+      success() &&
+      ((github.event_name == 'push' && (github.ref == 'refs/heads/main' || github.ref == 'refs/heads/develop')) ||
+      (github.event_name == 'workflow_dispatch' && github.event.inputs.apply == 'yes'))
 
     steps:
       - name: Wait for EC2 instance to initialize
@@ -160,23 +173,31 @@ jobs:
         timeout-minutes: 10
         run: |
           JENKINS_IP="${{ needs.terraform-apply.outputs.jenkins-ip }}"
-          echo "Checking Jenkins at http://$JENKINS_IP:8080"
+          echo "📍 Checking Jenkins at http://$JENKINS_IP:8080"
 
           for i in {1..30}; do
-            echo "Attempt $i/30..."
+            echo "🔍 Attempt $i/30..."
 
-            if curl -s -f -m 5 http://$JENKINS_IP:8080 > /dev/null 2>&1; then
-              echo "✅ Jenkins is accessible on port 8080"
-              exit 0
+            if timeout 5 bash -c "echo >/dev/tcp/$JENKINS_IP/8080" 2>/dev/null; then
+              echo "✅ Port 8080 is open"
+
+              if curl -s -m 5 http://$JENKINS_IP:8080 | grep -q "Jenkins"; then
+                echo "✅✅ Jenkins is running and responsive!"
+                exit 0
+              else
+                echo "⚠️  Port open but Jenkins page loading..."
+              fi
+            else
+              echo "⏳ Port 8080 not open yet..."
             fi
 
             if [ $i -lt 30 ]; then
-              echo "⏳ Jenkins not ready yet, waiting 10 seconds..."
               sleep 10
             fi
           done
 
           echo "❌ Jenkins failed to respond after 5 minutes"
+          echo "SSH to instance to check: sudo systemctl status jenkins"
           exit 1
 
       - name: Check Jenkins API
