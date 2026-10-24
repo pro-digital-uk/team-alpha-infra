@@ -172,8 +172,8 @@ jobs:
     steps:
       - name: Wait for EC2 instance to initialize
         run: |
-          echo "⏳ Waiting 180 seconds for EC2 instance and Docker startup..."
-          sleep 180
+          echo "⏳ Waiting 300 seconds (5 min) for EC2 instance and Docker startup..."
+          sleep 300
 
       - name: Check Jenkins is accessible
         id: jenkins-check
@@ -229,10 +229,10 @@ jobs:
         run: |
           JENKINS_IP="${{ needs.terraform-apply.outputs.jenkins-ip }}"
 
-          # Configure SSH
+          # Configure SSH (support both plain text and base64-encoded keys)
           mkdir -p ~/.ssh
           chmod 700 ~/.ssh
-          echo "${{ secrets.EC2_PRIVATE_KEY }}" > ~/.ssh/id_rsa
+          echo "${{ secrets.EC2_PRIVATE_KEY }}" | base64 -d > ~/.ssh/id_rsa 2>/dev/null || echo "${{ secrets.EC2_PRIVATE_KEY }}" > ~/.ssh/id_rsa
           chmod 600 ~/.ssh/id_rsa
 
           echo "🔐 Connecting to instance via SSH..."
@@ -271,7 +271,7 @@ jobs:
 
           mkdir -p ~/.ssh
           chmod 700 ~/.ssh
-          echo "${{ secrets.EC2_PRIVATE_KEY }}" > ~/.ssh/id_rsa
+          echo "${{ secrets.EC2_PRIVATE_KEY }}" | base64 -d > ~/.ssh/id_rsa 2>/dev/null || echo "${{ secrets.EC2_PRIVATE_KEY }}" > ~/.ssh/id_rsa
           chmod 600 ~/.ssh/id_rsa
 
           echo "🔐 Retrieving Jenkins initial admin password..."
