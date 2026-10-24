@@ -24,10 +24,28 @@ env:
   TERRAFORM_VERSION: 1.5.7
 
 jobs:
+  secret-scan:
+    name: 🔐 Scan for Secrets
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4.2.1
+        with:
+          fetch-depth: 0
+
+      - name: Run Gitleaks secret scanner
+        uses: gitleaks/gitleaks-action@v2
+        continue-on-error: true
+        env:
+          GITLEAKS_ENABLE_COMMENTS: true
+
   terraform-plan:
     name: Terraform Plan
     runs-on: ubuntu-latest
     timeout-minutes: 15
+    needs: secret-scan
     outputs:
       plan-exit-code: ${{ steps.plan.outputs.exit-code }}
 
