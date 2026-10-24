@@ -1,14 +1,6 @@
 name: Deploy Infrastructure & Verify Jenkins
 
 on:
-  push:
-    branches:
-      - main
-      - develop
-  pull_request:
-    branches:
-      - main
-      - develop
   workflow_dispatch:
     inputs:
       apply:
@@ -63,27 +55,13 @@ jobs:
         timeout-minutes: 10
         working-directory: ./
 
-      - name: Comment PR with plan
-        if: github.event_name == 'pull_request'
-        uses: actions/github-script@v7.0.1
-        with:
-          script: |
-            const plan = `${{ steps.plan.outputs.stdout }}`;
-            github.rest.issues.createComment({
-              issue_number: context.issue.number,
-              owner: context.repo.owner,
-              repo: context.repo.repo,
-              body: '```\n' + plan + '\n```'
-            })
 
   terraform-apply:
     name: Terraform Apply & Deploy
     runs-on: ubuntu-latest
     timeout-minutes: 30
     needs: terraform-plan
-    if: |
-      (github.event_name == 'push' && (github.ref == 'refs/heads/main' || github.ref == 'refs/heads/develop')) ||
-      (github.event_name == 'workflow_dispatch' && github.event.inputs.apply == 'yes')
+    if: github.event.inputs.apply == 'yes'
     environment:
       name: production
       url: http://${{ steps.terraform.outputs.jenkins_public_ip }}:8080
@@ -157,10 +135,7 @@ jobs:
     runs-on: ubuntu-latest
     timeout-minutes: 20
     needs: terraform-apply
-    if: |
-      success() &&
-      ((github.event_name == 'push' && (github.ref == 'refs/heads/main' || github.ref == 'refs/heads/develop')) ||
-      (github.event_name == 'workflow_dispatch' && github.event.inputs.apply == 'yes'))
+    if: success() && github.event.inputs.apply == 'yes'
 
     steps:
       - name: Wait for EC2 instance to initialize
