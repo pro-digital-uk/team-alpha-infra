@@ -2,7 +2,7 @@ pipeline {
     agent any
 
     parameters {
-        string(name: 'BRANCH', defaultValue: 'main', description: 'Git branch to checkout (e.g., main, develop, feature-branch)')
+        string(name: 'BRANCH', defaultValue: 'develop', description: 'Git branch to checkout (e.g., main, develop, feature-branch)')
     }
 
     options {
