@@ -1,6 +1,14 @@
 name: Deploy Infrastructure & Verify Jenkins
 
 on:
+  push:
+    branches:
+      - main
+      - develop
+  pull_request:
+    branches:
+      - main
+      - develop
   workflow_dispatch:
     inputs:
       apply:
@@ -61,7 +69,9 @@ jobs:
     runs-on: ubuntu-latest
     timeout-minutes: 30
     needs: terraform-plan
-    if: github.event.inputs.apply == 'yes'
+    if: |
+      (github.event_name == 'workflow_dispatch' && github.event.inputs.apply == 'yes') ||
+      (github.event_name == 'push' && (github.ref == 'refs/heads/main' || github.ref == 'refs/heads/develop'))
     environment:
       name: production
       url: http://${{ steps.terraform.outputs.jenkins_public_ip }}:8080
@@ -135,7 +145,11 @@ jobs:
     runs-on: ubuntu-latest
     timeout-minutes: 20
     needs: terraform-apply
-    if: success() && github.event.inputs.apply == 'yes'
+    if: |
+      success() && (
+      (github.event_name == 'workflow_dispatch' && github.event.inputs.apply == 'yes') ||
+      (github.event_name == 'push' && (github.ref == 'refs/heads/main' || github.ref == 'refs/heads/develop'))
+      )
 
     steps:
       - name: Wait for EC2 instance to initialize
