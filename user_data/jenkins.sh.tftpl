@@ -103,3 +103,116 @@ systemctl start docker || true
 systemctl enable docker || true
 
 log_message "All installations completed successfully"
+
+# Wait for Jenkins to fully initialize
+log_message "Waiting for Jenkins to be fully initialized..."
+max_attempts=120
+attempt=0
+while [ $attempt -lt $max_attempts ]; do
+  if curl -s http://localhost:8080/api/json > /dev/null 2>&1; then
+    log_message "Jenkins API is responding"
+    break
+  fi
+  attempt=$((attempt + 1))
+  if [ $((attempt % 20)) -eq 0 ]; then
+    log_message "Waiting for Jenkins API... (attempt $attempt/$max_attempts)"
+  fi
+  sleep 2
+done
+
+# Get Jenkins initial admin password
+if [ -f /var/lib/jenkins/secrets/initialAdminPassword ]; then
+  JENKINS_PASSWORD=$(cat /var/lib/jenkins/secrets/initialAdminPassword)
+  log_message "Jenkins initial admin password retrieved"
+else
+  log_message "WARNING: Initial admin password file not found yet"
+  JENKINS_PASSWORD=""
+fi
+
+# Install Jenkins plugins
+log_message "Installing Jenkins plugins..."
+JENKINS_HOME="/var/lib/jenkins"
+PLUGINS_DIR="$JENKINS_HOME/plugins"
+
+# Function to install a Jenkins plugin
+install_plugin() {
+  local plugin_name=$1
+  log_message "Installing plugin: $plugin_name..."
+
+  # Wait for Jenkins CLI to be available
+  if [ -f "$JENKINS_HOME/jenkins-cli.jar" ]; then
+    java -jar "$JENKINS_HOME/jenkins-cli.jar" -s http://localhost:8080 \
+      install-plugin "$plugin_name" -restart 2>&1 | tee -a "$log_file" || true
+  else
+    log_message "WARNING: Jenkins CLI not available yet"
+  fi
+}
+
+# Give Jenkins a moment to fully start
+sleep 10
+
+# List of plugins to install
+PLUGINS=(
+  "github:1.37.3.1"
+  "aws-codecommit-trigger:3.13"
+  "docker-plugin:1.2.10"
+  "docker-workflow:522.v05c62c2ea_b_53"
+  "pipeline-stage-view:2.30"
+  "blueocean:1.27.10"
+  "credentials:1289.v97fac87da_44f"
+  "ssh-agent:1.7.0"
+  "aws-codecommit-trigger:3.13"
+  "terraform:2.15.1"
+)
+
+# Install each plugin
+for plugin in "${PLUGINS[@]}"; do
+  install_plugin "$plugin"
+done
+
+log_message "Jenkins plugin installation completed"
+
+# Create Jenkins init script for configuration
+log_message "Configuring Jenkins initial settings..."
+mkdir -p "$JENKINS_HOME/init.groovy.d"
+
+cat > "$JENKINS_HOME/init.groovy.d/basic-config.groovy" << 'GROOVY_CONFIG'
+import jenkins.model.Jenkins
+import hudson.security.SecurityRealm
+import hudson.security.AuthorizationStrategy
+
+Jenkins jenkins = Jenkins.getInstance()
+
+// Disable Jenkins setup wizard
+jenkins.setInstallationName("Team Alpha DevOps")
+jenkins.save()
+
+log_message "Jenkins basic configuration completed"
+GROOVY_CONFIG
+
+chown -R jenkins:jenkins "$JENKINS_HOME/init.groovy.d"
+chmod -R 755 "$JENKINS_HOME/init.groovy.d"
+
+log_message "Jenkins initialization scripts created"
+
+# Restart Jenkins to apply configurations
+log_message "Restarting Jenkins to apply plugin configurations..."
+systemctl restart jenkins || log_message "WARNING: Failed to restart Jenkins"
+
+# Wait for Jenkins to come back up
+sleep 15
+max_attempts=60
+attempt=0
+while [ $attempt -lt $max_attempts ]; do
+  if curl -s http://localhost:8080 > /dev/null 2>&1; then
+    log_message "Jenkins is back online"
+    break
+  fi
+  attempt=$((attempt + 1))
+  if [ $((attempt % 10)) -eq 0 ]; then
+    log_message "Waiting for Jenkins to restart... (attempt $attempt/$max_attempts)"
+  fi
+  sleep 2
+done
+
+log_message "Jenkins setup and plugin installation completed successfully"
