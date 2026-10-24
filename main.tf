@@ -41,13 +41,14 @@ module "s3_assets" {
 module "ec2_jenkins" {
   source = "git::https://github.com/pro-digital-uk/aws-ec2-module.git"
 
-  name                        = "${local.name}-jenkins"
-  subnet_id                   = module.vpc.public_subnet_ids[0]
-  instance_type               = var.instance_type
-  associate_public_ip_address = true
-  s3_bucket_arns              = [module.s3_assets.bucket_arn]
-  # ami_id                      = var.jenkins_ami_id
-  #user_data                   = templatefile("${path.module}/user_data/jenkins.sh.tftpl", { environment = var.environment })
+  name                          = "${local.name}-jenkins"
+  subnet_id                     = module.vpc.public_subnet_ids[0]
+  instance_type                 = var.instance_type
+  associate_public_ip_address   = true
+  s3_bucket_arns                = [module.s3_assets.bucket_arn]
+  ami_id                        = var.jenkins_ami_id
+  user_data                     = templatefile("${path.module}/user_data/jenkins.sh.tftpl", { environment = var.environment })
+  user_data_replace_on_change   = true
 
   security_group_ids = [aws_security_group.jenkins.id]
 }
