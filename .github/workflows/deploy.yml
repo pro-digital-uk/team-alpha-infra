@@ -190,6 +190,8 @@ jobs:
           exit 1
 
       - name: Check Jenkins API
+        if: always()
+        continue-on-error: true
         run: |
           JENKINS_IP="${{ needs.terraform-apply.outputs.jenkins-ip }}"
           echo "Checking Jenkins API..."
@@ -204,6 +206,7 @@ jobs:
           fi
 
       - name: Verify Jenkins via SSH
+        if: always()
         continue-on-error: true
         run: |
           JENKINS_IP="${{ needs.terraform-apply.outputs.jenkins-ip }}"
@@ -243,6 +246,7 @@ jobs:
           SSHEOF
 
       - name: Get Jenkins initial admin password
+        if: always()
         continue-on-error: true
         run: |
           JENKINS_IP="${{ needs.terraform-apply.outputs.jenkins-ip }}"
