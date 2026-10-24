@@ -1,3 +1,7 @@
+terraform {
+  required_version = ">= 1.6"
+}
+
 data "aws_availability_zones" "available" {
   state = "available"
 }
