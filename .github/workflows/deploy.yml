@@ -165,8 +165,8 @@ jobs:
     steps:
       - name: Wait for EC2 instance to initialize
         run: |
-          echo "⏳ Waiting 120 seconds for EC2 instance startup..."
-          sleep 120
+          echo "⏳ Waiting 180 seconds for EC2 instance and Docker startup..."
+          sleep 180
 
       - name: Check Jenkins is accessible
         id: jenkins-check
