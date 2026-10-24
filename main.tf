@@ -46,8 +46,8 @@ module "ec2_jenkins" {
   instance_type               = var.instance_type
   associate_public_ip_address = true
   s3_bucket_arns              = [module.s3_assets.bucket_arn]
-  ami_id                      = var.jenkins_ami_id
-  user_data                   = templatefile("${path.module}/user_data/jenkins.sh.tftpl", { environment = var.environment })
+  # ami_id                      = var.jenkins_ami_id
+  #user_data                   = templatefile("${path.module}/user_data/jenkins.sh.tftpl", { environment = var.environment })
 
   security_group_ids = [aws_security_group.jenkins.id]
 }
