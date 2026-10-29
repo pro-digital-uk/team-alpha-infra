@@ -17,7 +17,7 @@ pipeline {
 
         stage('Terraform List ') {
             steps {
-                sh 'cd team-alpha-infra'
+                sh 'ls -la'
             }
         }
 
@@ -29,19 +29,19 @@ pipeline {
 
         stage('Terraform Format') {
             steps {
-                sh 'terraform fmt'
+                sh 'pwd'
             }
         }
 
         stage('Terraform Init') {
             steps {
-                sh 'terraform init'
+                sh 'sleep 5'
             }
         }
 
         stage('Terraform Plan') {
             steps {
-                sh 'terraform plan'
+                sh 'date'
             }
         }
     }
