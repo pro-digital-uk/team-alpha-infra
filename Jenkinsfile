@@ -23,7 +23,7 @@ pipeline {
 
         stage('Terraform Version') {
             steps {
-                sh 'terraform version'
+                sh 'sleep 10'
             }
         }
 
