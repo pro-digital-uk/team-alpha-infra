@@ -23,25 +23,25 @@ pipeline {
 
         stage('Terraform Version') {
             steps {
-                sh 'sleep 5'
+                sh 'terraform version'
             }
         }
 
         stage('Terraform Format') {
             steps {
-                sh 'java -version'
+                sh 'terraform fmt'
             }
         }
 
         stage('Terraform Init') {
             steps {
-                sh 'terraform -version'
+                sh 'terraform init'
             }
         }
 
         stage('Terraform Plan') {
             steps {
-                sh 'date'
+                sh 'terraform plan'
             }
         }
     }
