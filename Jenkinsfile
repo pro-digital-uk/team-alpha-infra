@@ -35,7 +35,7 @@ pipeline {
 
         stage('Terraform Init') {
             steps {
-                sh 'python -version'
+                sh 'terraform -version'
             }
         }
 
