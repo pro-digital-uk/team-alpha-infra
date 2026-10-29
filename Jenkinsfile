@@ -23,19 +23,19 @@ pipeline {
 
         stage('Terraform Version') {
             steps {
-                sh 'sleep 10'
+                sh 'sleep 5'
             }
         }
 
         stage('Terraform Format') {
             steps {
-                sh 'pwd'
+                sh 'java -version'
             }
         }
 
         stage('Terraform Init') {
             steps {
-                sh 'sleep 5'
+                sh 'python -version'
             }
         }
 
