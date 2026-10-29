@@ -15,6 +15,12 @@ pipeline {
             }
         }
 
+        stage('Terraform List ') {
+            steps {
+                sh 'cd team-alpha-infra'
+            }
+        }
+
         stage('Terraform Version') {
             steps {
                 sh 'terraform version'
