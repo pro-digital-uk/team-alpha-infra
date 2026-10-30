@@ -94,3 +94,9 @@ variable "az" {
 #   type        = string
 #   default     = "ami-0224ce6f9504665ee"
 # }
+
+# variable "public_key_path" {
+#   description = "Path to the public key file for the EC2 key pair."
+#   type        = string
+#   # default     = "~/.ssh/id_rsa.pub"
+# }

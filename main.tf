@@ -54,6 +54,14 @@ module "ec2_jenkins" {
   security_group_ids = [aws_security_group.jenkins.id]
 }
 
+# ---------------------------------------------------------------------------
+# Key pair for EC2 access
+# ---------------------------------------------------------------------------
+module "keypair" {
+  source = "./keypair"
+  key_name = "${local.name}-keypair"
+  # public_key_path = var.public_key_path
+}
 
 # ---------------------------------------------------------------------------
 # Web tier: Nginx in a public subnet
@@ -67,9 +75,10 @@ module "ec2_web" {
   associate_public_ip_address = true
   # s3_bucket_arns              = [module.s3_assets.bucket_arn]
   user_data                   = templatefile("${path.module}/user_data/web.sh.tftpl", { environment = var.environment })
-
   security_group_ids = [aws_security_group.web.id]
+  # key_name = module.keypair.key_name
 }
+
 
 # ---------------------------------------------------------------------------
 # App tier: private subnet, no public IP
@@ -118,9 +127,4 @@ module "ec2_web" {
 #   db_port            = 3306
 # }
 
-# # ---------------------------------------------------------------------------
-# # Key pair for EC2 access
-# # ---------------------------------------------------------------------------
-# module "keypair" {
-#   source = "../../modules/keypair"
-# }
+

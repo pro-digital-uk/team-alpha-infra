@@ -38,11 +38,10 @@ output "jenkins_public_dns" {
   value       = module.ec2_jenkins.public_ip
 }
 
-
-
-
-
-
+output "key_name" {
+  description = "Name of the key pair for EC2 access."
+  value       = module.ec2_jenkins.key_name
+}
 
 
 # output "web_instance_id" {
