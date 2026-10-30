@@ -88,3 +88,15 @@ variable "az" {
   default     = "eu-west-2a"
 
 }
+
+# variable "jenkins_ami_id" {
+#   description = "AMI ID for the Jenkins server."
+#   type        = string
+#   default     = "ami-0224ce6f9504665ee"
+# }
+
+# variable "public_key_path" {
+#   description = "Path to the public key file for the EC2 key pair."
+#   type        = string
+#   # default     = "~/.ssh/id_rsa.pub"
+# }

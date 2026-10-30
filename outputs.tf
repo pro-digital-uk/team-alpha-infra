@@ -23,6 +23,27 @@ output "db_subnet_group_name" {
   value       = module.vpc.db_subnet_group_name
 }
 
+output "jenkins_instance_id" {
+  description = "Jenkins instance ID."
+  value       = module.ec2_jenkins.instance_id
+}
+
+output "jenkins_public_ip" {
+  description = "Jenkins public IP. Access at http://<ip>:8080"
+  value       = module.ec2_jenkins.public_ip
+}
+
+output "jenkins_public_dns" {
+  description = "Jenkins public DNS. Access at http://<dns>:8080"
+  value       = module.ec2_jenkins.public_ip
+}
+
+output "key_name" {
+  description = "Name of the key pair for EC2 access."
+  value       = module.ec2_jenkins.key_name
+}
+
+
 # output "web_instance_id" {
 #   description = "Web tier instance ID. Connect with: aws ssm start-session --target <id>"
 #   value       = module.web.instance_id
